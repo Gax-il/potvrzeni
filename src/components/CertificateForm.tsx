@@ -302,11 +302,13 @@ export function CertificateForm({ data, onChange }: CertificateFormProps) {
 
   const handleLocationChange = (_id: keyof CertificateData, value: string) => {
     const campStillValid = getCampsForLocation(value).includes(data.campName);
+    const turnus = getTurnusyForLocation(value)[0];
     onChange({
       ...data,
       location: value,
-      campName: campStillValid ? data.campName : "",
-      term: "",
+      campName: campStillValid ? data.campName : getCampsForLocation(value)[0] ?? "",
+      term: turnus ? formatTurnusRange(turnus) : "",
+      issueDate: turnus ? turnus.end : data.issueDate,
     });
   };
 

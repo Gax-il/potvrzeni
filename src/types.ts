@@ -163,19 +163,23 @@ export function formatAmount(raw: string, currency: Currency): string {
   return `${formatted} ${symbol}`;
 }
 
+const DEFAULT_LOCATION = LOCATION_OPTIONS[0];
+const DEFAULT_CAMP = getCampsForLocation(DEFAULT_LOCATION)[0];
+const DEFAULT_TURNUS = getTurnusyForLocation(DEFAULT_LOCATION)[0];
+
 export const emptyCertificateData: CertificateData = {
   childName: "",
   birthDate: "",
-  gender: "",
-  campName: "",
-  location: "",
-  term: "",
+  gender: "chlapec",
+  campName: DEFAULT_CAMP,
+  location: DEFAULT_LOCATION,
+  term: formatTurnusRange(DEFAULT_TURNUS),
   orderNumber: "",
   amount: "",
   currency: "CZK",
-  issuePlace: "",
+  issuePlace: DEFAULT_LOCATION,
   issuePlacePreposition: "V",
-  issueDate: "",
+  issueDate: DEFAULT_TURNUS.end,
 };
 
 const REQUIRED_FIELDS: (keyof CertificateData)[] = [
