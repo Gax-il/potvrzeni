@@ -1,77 +1,60 @@
-import logoUrl from "@/assets/logo-4camps.svg";
-import {
-  formatAmount,
-  getLocationParts,
-  getIssuePlaceClosing,
-  type CertificateData,
-} from "@/types";
+import { useEffect, useRef } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { generateCertificatePdf } from "@/lib/generate-pdf";
+import type { CertificateData } from "@/types";
 
-const INK = "#000000";
-const GRAY = "#5A5A5A";
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
+// Raster width the PDF page is rendered at, before CSS scales it to the
+// container. High enough to stay crisp on retina displays.
+const RENDER_WIDTH_PX = 1000;
+
+/**
+ * Rasterizes the actual generated PDF onto a plain <canvas>, so the preview
+ * can never drift from the downloaded file and carries none of the browser's
+ * native PDF-viewer chrome (toolbar, zoom controls, scrollbars).
+ */
 export function CertificatePreview({ data }: { data: CertificateData }) {
-  const verb = data.gender === "chlapec" ? "zúčastnil" : "zúčastnila";
-  const locationParts = getLocationParts(data.location);
-  const closingPhrase = data.issuePlace
-    ? getIssuePlaceClosing(data.issuePlace, data.issuePlacePreposition)
-    : "";
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        const bytes = generateCertificatePdf(data).output(
+          "arraybuffer",
+        ) as ArrayBuffer;
+        const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+        const page = await pdf.getPage(1);
+        const canvas = canvasRef.current;
+        if (!canvas || cancelled) return;
+
+        const baseViewport = page.getViewport({ scale: 1 });
+        const scale = RENDER_WIDTH_PX / baseViewport.width;
+        const viewport = page.getViewport({ scale });
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      })();
+    }, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [data]);
 
   return (
-    <div className="@container w-full">
-      <div
-        className="relative aspect-210/297 w-full overflow-hidden rounded-sm shadow-[0_20px_45px_-15px_rgba(0,0,0,0.35)] ring-1 ring-black/10"
-        style={{ background: "#FEFDFA", color: INK, fontFamily: "Nunito, sans-serif" }}
-      >
-        <div className="absolute inset-0 flex flex-col px-[11.4cqw] pt-[9cqw] pb-[8cqw]">
-          <img src={logoUrl} alt="4Camps" className="h-[3.6cqw] w-auto" />
-
-          <div className="mt-[3.5cqw] w-full border-t" style={{ borderColor: INK }} />
-
-          <h1 className="mt-[4cqw] text-[3.4cqw] font-extrabold leading-[1.25] [text-wrap:balance]">
-            Potvrzení o účasti na táboře
-          </h1>
-
-          <div className="mt-[5cqw] space-y-[2.6cqw] text-[2.3cqw] leading-[1.6]">
-            <p>
-              Potvrzujeme, že <strong>{data.childName || "…"}</strong>, nar.{" "}
-              <strong>{data.birthDate || "…"}</strong>, se {verb} tábora{" "}
-              <strong>{data.campName || "…"}</strong> {locationParts.preposition}{" "}
-              <strong>{data.location ? locationParts.form : "…"}</strong> v termínu{" "}
-              <strong>{data.term || "…"}</strong>, č. objednávky:{" "}
-              <strong>{data.orderNumber || "…"}</strong>.
-            </p>
-            <p>
-              Byla uhrazena celková částka{" "}
-              <strong>{formatAmount(data.amount, data.currency) || "…"}</strong>.
-            </p>
-          </div>
-
-          <div className="mt-auto flex items-end justify-between pt-[6cqw]">
-            <p className="text-[2.3cqw]">
-              {closingPhrase || "…"} dne {data.issueDate || "…"}:
-            </p>
-            <div className="flex flex-col items-center gap-[1cqw]">
-              <div
-                className="w-[15cqw] border-t"
-                style={{ borderColor: `${GRAY}66` }}
-              />
-              <div className="text-[1.5cqw]" style={{ color: GRAY }}>
-                razítko a podpis
-              </div>
-            </div>
-          </div>
-
-          <div
-            className="absolute bottom-[3cqw] left-[11.4cqw] right-[11.4cqw] text-[1.4cqw] leading-[1.6]"
-            style={{ color: GRAY }}
-          >
-            <p>Organizátorem akcí 4CAMPS je Zvědavý medvěd z. s.</p>
-            <p>
-              Konzumní 444/27, Hloubětín, 198 00 Praha | IČ: 06832890 |
-              4camps.cz
-            </p>
-          </div>
-        </div>
+    <div className="w-full">
+      <div className="relative aspect-210/297 w-full overflow-hidden rounded-sm bg-white shadow-[0_20px_45px_-15px_rgba(0,0,0,0.35)] ring-1 ring-black/10">
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 h-full w-full"
+        />
       </div>
     </div>
   );

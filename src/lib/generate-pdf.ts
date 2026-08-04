@@ -29,12 +29,20 @@ function registerFonts(doc: jsPDF) {
   doc.addFont("Nunito-ExtraBold.ttf", "NunitoExtraBold", "normal");
 }
 
+/** Placeholder for not-yet-filled fields, matching the live preview. Harmless on
+ * real downloads: the download button stays disabled until every field is filled. */
+const dash = (v: string) => (v.trim() ? v : "…");
+
 export function generateCertificatePdf(data: CertificateData): jsPDF {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   registerFonts(doc);
 
   const verb = data.gender === "chlapec" ? "zúčastnil" : "zúčastnila";
   const locationParts = getLocationParts(data.location);
+  const locationForm = data.location ? locationParts.form : "…";
+  const closingPhrase = data.issuePlace
+    ? getIssuePlaceClosing(data.issuePlace, data.issuePlacePreposition)
+    : "…";
 
   // Header: logo
   const logoHeight = 7.5;
@@ -65,17 +73,17 @@ export function generateCertificatePdf(data: CertificateData): jsPDF {
     doc,
     [
       { text: "Potvrzujeme, že " },
-      { text: data.childName, bold: true },
+      { text: dash(data.childName), bold: true },
       { text: ", nar. " },
-      { text: data.birthDate, bold: true },
+      { text: dash(data.birthDate), bold: true },
       { text: `, se ${verb} tábora ` },
-      { text: data.campName, bold: true },
+      { text: dash(data.campName), bold: true },
       { text: ` ${locationParts.preposition} ` },
-      { text: locationParts.form, bold: true },
+      { text: locationForm, bold: true },
       { text: " v termínu " },
-      { text: data.term, bold: true },
+      { text: dash(data.term), bold: true },
       { text: ", č. objednávky: " },
-      { text: data.orderNumber, bold: true },
+      { text: dash(data.orderNumber), bold: true },
       { text: "." },
     ],
     MARGIN_X,
@@ -91,7 +99,7 @@ export function generateCertificatePdf(data: CertificateData): jsPDF {
     doc,
     [
       { text: "Byla uhrazena celková částka " },
-      { text: formatAmount(data.amount, data.currency), bold: true },
+      { text: formatAmount(data.amount, data.currency) || "…", bold: true },
       { text: "." },
     ],
     MARGIN_X,
@@ -100,16 +108,12 @@ export function generateCertificatePdf(data: CertificateData): jsPDF {
     { fontFamily: "Nunito", fontSize: 9.5, lineHeight: 5, color: BLACK },
   );
 
-  // Closing line + signature area
-  const closeY = 190;
+  // Closing line + signature area (sits just above the footer, not mid-page)
+  const closeY = 252;
   doc.setFont("Nunito", "normal");
   doc.setFontSize(9.5);
   doc.setTextColor(...BLACK);
-  const closingPhrase = getIssuePlaceClosing(
-    data.issuePlace,
-    data.issuePlacePreposition,
-  );
-  doc.text(`${closingPhrase} dne ${data.issueDate}:`, MARGIN_X, closeY);
+  doc.text(`${closingPhrase} dne ${dash(data.issueDate)}:`, MARGIN_X, closeY);
 
   doc.setDrawColor(...GRAY);
   doc.setLineWidth(0.3);
