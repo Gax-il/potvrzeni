@@ -9,8 +9,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  CAMP_OPTIONS,
   CURRENCY_OPTIONS,
+  formatTurnusRange,
+  getCampsForLocation,
+  getTurnusyForLocation,
   LOCATION_OPTIONS,
   type CertificateData,
   type Gender,
@@ -66,6 +68,8 @@ interface SelectFieldProps {
   span?: 1 | 2;
 }
 
+/** Select from `options`, with a "Jiné…" fallback that switches to a free-text input
+ * so values outside the predefined area data can still be entered. */
 function SelectField({
   label,
   id,
@@ -75,10 +79,25 @@ function SelectField({
   onChange,
   span = 2,
 }: SelectFieldProps) {
+  const [customMode, setCustomMode] = useState(
+    value !== "" && !options.includes(value),
+  );
+
   return (
     <div className={`flex flex-col gap-1.5 ${span === 1 ? "col-span-1" : "col-span-2"}`}>
       <Label htmlFor={id}>{label}</Label>
-      <Select value={value || undefined} onValueChange={(v) => onChange(id, v)}>
+      <Select
+        value={customMode ? CUSTOM_SENTINEL : value || undefined}
+        onValueChange={(v) => {
+          if (v === CUSTOM_SENTINEL) {
+            setCustomMode(true);
+            onChange(id, "");
+          } else {
+            setCustomMode(false);
+            onChange(id, v);
+          }
+        }}
+      >
         <SelectTrigger id={id} className="w-full">
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
@@ -88,8 +107,17 @@ function SelectField({
               {option}
             </SelectItem>
           ))}
+          <SelectItem value={CUSTOM_SENTINEL}>Jiné…</SelectItem>
         </SelectContent>
       </Select>
+      {customMode && (
+        <Input
+          autoFocus
+          value={value}
+          placeholder="Vlastní hodnota"
+          onChange={(e) => onChange(id, e.target.value)}
+        />
+      )}
     </div>
   );
 }
@@ -199,6 +227,70 @@ function IssuePlaceField({
   );
 }
 
+/** Term select driven by the chosen location's turnusy. Picking a turnus fills the term
+ * text with its date range and defaults the signing date to the turnus's last day; "Jiné…"
+ * falls back to a free-text term with no effect on the signing date. */
+function TermField({
+  location,
+  value,
+  onChange,
+  onIssueDateChange,
+}: {
+  location: string;
+  value: string;
+  onChange: (id: keyof CertificateData, value: string) => void;
+  onIssueDateChange: (value: string) => void;
+}) {
+  const options = getTurnusyForLocation(location);
+  const matched = options.find((t) => formatTurnusRange(t) === value);
+  const [customMode, setCustomMode] = useState(
+    !matched && (value !== "" || options.length === 0),
+  );
+
+  return (
+    <div className="col-span-2 flex flex-col gap-1.5">
+      <Label htmlFor="term">Termín</Label>
+      <Select
+        value={customMode ? CUSTOM_SENTINEL : matched?.id}
+        onValueChange={(v) => {
+          if (v === CUSTOM_SENTINEL) {
+            setCustomMode(true);
+            onChange("term", "");
+          } else {
+            const turnus = options.find((o) => o.id === v);
+            if (!turnus) return;
+            setCustomMode(false);
+            onChange("term", formatTurnusRange(turnus));
+            onIssueDateChange(turnus.end);
+          }
+        }}
+      >
+        <SelectTrigger id="term" className="w-full">
+          <SelectValue
+            placeholder={options.length ? "Vyber termín" : "Nejprve vyber místo konání"}
+          />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((turnus) => (
+            <SelectItem key={turnus.id} value={turnus.id}>
+              {turnus.label} ({formatTurnusRange(turnus)})
+            </SelectItem>
+          ))}
+          <SelectItem value={CUSTOM_SENTINEL}>Jiné…</SelectItem>
+        </SelectContent>
+      </Select>
+      {customMode && (
+        <Input
+          autoFocus
+          value={value}
+          placeholder="18.7. – 25.7.2025"
+          onChange={(e) => onChange("term", e.target.value)}
+        />
+      )}
+    </div>
+  );
+}
+
 interface CertificateFormProps {
   data: CertificateData;
   onChange: (data: CertificateData) => void;
@@ -207,6 +299,16 @@ interface CertificateFormProps {
 export function CertificateForm({ data, onChange }: CertificateFormProps) {
   const set = (id: keyof CertificateData, value: string) =>
     onChange({ ...data, [id]: value } as CertificateData);
+
+  const handleLocationChange = (_id: keyof CertificateData, value: string) => {
+    const campStillValid = getCampsForLocation(value).includes(data.campName);
+    onChange({
+      ...data,
+      location: value,
+      campName: campStillValid ? data.campName : "",
+      term: "",
+    });
+  };
 
   return (
     <div className="grid grid-cols-2 gap-x-4 gap-y-5">
@@ -249,29 +351,28 @@ export function CertificateForm({ data, onChange }: CertificateFormProps) {
       </div>
 
       <SelectField
-        label="Camp"
-        id="campName"
-        value={data.campName}
-        options={CAMP_OPTIONS}
-        placeholder="Vyber camp"
-        onChange={set}
-      />
-
-      <SelectField
         label="Místo konání"
         id="location"
         value={data.location}
         options={LOCATION_OPTIONS}
         placeholder="Vyber místo"
+        onChange={handleLocationChange}
+      />
+
+      <SelectField
+        label="Camp"
+        id="campName"
+        value={data.campName}
+        options={getCampsForLocation(data.location)}
+        placeholder="Vyber camp"
         onChange={set}
       />
 
-      <Field
-        label="Termín"
-        id="term"
+      <TermField
+        location={data.location}
         value={data.term}
         onChange={set}
-        placeholder="18.7. – 25.7.2025"
+        onIssueDateChange={(v) => set("issueDate", v)}
       />
 
       <Field
