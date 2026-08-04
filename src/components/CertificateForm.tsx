@@ -234,12 +234,12 @@ function TermField({
   location,
   value,
   onChange,
-  onIssueDateChange,
+  onTermPick,
 }: {
   location: string;
   value: string;
   onChange: (id: keyof CertificateData, value: string) => void;
-  onIssueDateChange: (value: string) => void;
+  onTermPick: (term: string, issueDate: string) => void;
 }) {
   const options = getTurnusyForLocation(location);
   const matched = options.find((t) => formatTurnusRange(t) === value);
@@ -260,8 +260,7 @@ function TermField({
             const turnus = options.find((o) => o.id === v);
             if (!turnus) return;
             setCustomMode(false);
-            onChange("term", formatTurnusRange(turnus));
-            onIssueDateChange(turnus.end);
+            onTermPick(formatTurnusRange(turnus), turnus.end);
           }
         }}
       >
@@ -374,7 +373,7 @@ export function CertificateForm({ data, onChange }: CertificateFormProps) {
         location={data.location}
         value={data.term}
         onChange={set}
-        onIssueDateChange={(v) => set("issueDate", v)}
+        onTermPick={(term, issueDate) => onChange({ ...data, term, issueDate })}
       />
 
       <Field
